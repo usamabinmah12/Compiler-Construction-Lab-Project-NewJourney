@@ -1,5 +1,6 @@
 #ifndef AST_HPP
 #define AST_HPP
+
 #include <iostream>
 #include <string>
 
@@ -25,4 +26,5 @@ public:
         std::cout << "PRINT " << strExpr->value << std::endl;
     }
 };
+
 #endif
