@@ -1,30 +1,19 @@
-// variable declaration and arithmetic
-let x = 5;
-let y = 10;
-let z = x + y * 2;
-print(z);
+CC = gcc
+CFLAGS = -Wall -g
 
-// if-else
-if (x < y) {
-    print(x);
-} else {
-    print(y);
-}
+all: interpreter
 
-// while loop with unary minus and comparison
-let i = 0;
-while (i < 5) {
-    print(i);
-    i = i + 1;
-}
+parser.tab.c parser.tab.h: parser.y
+	bison -d parser.y
 
-// nested if inside while
-let n = 0;
-while (n < 4) {
-    if (n == 2) {
-        print(-n);
-    } else {
-        print(n);
-    }
-    n = n + 1;
-}
+lex.yy.c: lexer.l parser.tab.h
+	flex lexer.l
+
+interpreter: parser.tab.c lex.yy.c ast.c ast.h
+	$(CC) $(CFLAGS) -o interpreter parser.tab.c lex.yy.c ast.c
+
+run: interpreter
+	./interpreter example.txt
+
+clean:
+	rm -f interpreter parser.tab.c parser.tab.h lex.yy.c *.o
