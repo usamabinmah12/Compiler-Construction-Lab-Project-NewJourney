@@ -16,6 +16,11 @@
 "print"                 { return PRINT; }
 
 [0-9]+                  { yylval.num = atoi(yytext); return NUMBER; }
+\"[^"\n]*\"             {
+                            yylval.str = strdup(yytext + 1);
+                            yylval.str[strlen(yylval.str) - 1] = '\0';
+                            return STRING;
+                        }
 [a-zA-Z_][a-zA-Z0-9_]*  { yylval.str = strdup(yytext); return ID; }
 
 "=="                    { return EQ; }

@@ -13,6 +13,7 @@ enum NodeType {
     N_BINOP,
     N_ASSIGN,
     N_PRINT,
+    N_PRINT_STR,
     N_IF,
     N_WHILE
 };
@@ -65,6 +66,13 @@ inline Node *make_print(Node *expr) {
     Node *n = new Node();
     n->type = N_PRINT;
     n->left = expr;
+    return n;
+}
+
+inline Node *make_print_str(const std::string &text) {
+    Node *n = new Node();
+    n->type = N_PRINT_STR;
+    n->name = text;
     return n;
 }
 
@@ -188,6 +196,9 @@ inline void exec_stmt(Node *n) {
             break;
         case N_PRINT:
             printf("%d\n", eval_expr(n->left));
+            break;
+        case N_PRINT_STR:
+            printf("%s\n", n->name.c_str());
             break;
         case N_IF:
             if (eval_expr(n->left)) exec_list(n->right);
