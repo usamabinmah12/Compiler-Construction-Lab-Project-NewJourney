@@ -60,3 +60,24 @@ cmake-build-*/
 # ==================================================
 .DS_Store
 Thumbs.db
+
+ Bison / Flex generated files (auto-created by `make`)
+src/parser/parser.tab.cpp
+src/parser/parser.tab.h
+src/lexer/lexer.yy.cpp
+ 
+# Compiled binary
+compiler
+compiler.exe
+ 
+# Object / build files
+*.o
+*.out
+*.obj
+ 
+# macOS
+.DS_Store
+ 
+# Editor
+.vscode/*
+!.vscode/settings.json

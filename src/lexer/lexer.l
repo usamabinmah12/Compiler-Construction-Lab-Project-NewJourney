@@ -3,8 +3,8 @@
 
 %{
 #include "parser.tab.h"
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
 %}
 
 %%
@@ -43,7 +43,7 @@
 
 "//"[^\n]*              { /* line comment, skip */ }
 [ \t\r]+                { /* skip whitespace */ }
-\n                      { /* skip newline, yylineno tracks it */ }
+\n                      { /* newline, yylineno tracks it */ }
 
 .                       { fprintf(stderr, "Lexical error line %d: unexpected character '%s'\n", yylineno, yytext); }
 

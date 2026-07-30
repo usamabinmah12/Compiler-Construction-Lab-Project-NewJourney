@@ -1,5 +1,5 @@
 let i = 0;
 while (i < 10) {
-    print "usama";
+    print "usama Motu , Hamza Patlu , Salim The Greedy";
     i = i + 1;
 }
