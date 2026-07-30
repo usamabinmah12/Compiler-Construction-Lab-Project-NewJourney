@@ -1,0 +1,4 @@
+print "Hello NewJourney";
+let x = 42;
+print "The answer is:";
+print(x);
