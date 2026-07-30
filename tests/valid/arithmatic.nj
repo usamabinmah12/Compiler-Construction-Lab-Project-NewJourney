@@ -1,4 +1,7 @@
 x = 10 + 5;
 y = 20 - 8;
 z = x + y;
+<<<<<<< HEAD
+=======
 print(z);
+>>>>>>> 1693c09440cd60d70a8c3bcdccae64fda235caeb
