@@ -7,36 +7,31 @@
 
 /* ---------- AST node ---------- */
 
+enum ExprType { T_UNKNOWN, T_INT, T_BOOL };
+
 enum NodeType {
     N_NUM,
     N_VAR,
     N_BINOP,
-    N_ASSIGN,   /* re-assignment to an already declared variable */
-    N_DECL,     /* declaration:  let x = expr ;                   */
+    N_DECL,
+    N_ASSIGN,
     N_PRINT,
     N_PRINT_STR,
     N_IF,
     N_WHILE
 };
 
-/* result type of an expression (used by the semantic analyzer) */
-enum ExprType {
-    T_UNKNOWN,
-    T_INT,
-    T_BOOL
-};
-
 struct Node {
     NodeType type;
     int value = 0;              // used by N_NUM
-    std::string name;           // used by N_VAR, N_ASSIGN, N_DECL, N_PRINT_STR
+    std::string name;           // used by N_VAR, N_DECL, N_ASSIGN
     char op = 0;                // used by N_BINOP: + - * / u E N L G l g
-    int line = 0;               // source line (for error messages)
-    ExprType etype = T_UNKNOWN; // filled in by the semantic analyzer
     Node *left = nullptr;       // expr operand / cond / assign-expr / print-expr
     Node *right = nullptr;      // expr operand / then-branch head / while-body head
     Node *third = nullptr;      // else-branch head (N_IF only)
     Node *next = nullptr;       // next statement in a statement list
+    int line = 0;                    // source line (filled in by the parser)
+    ExprType etype = T_UNKNOWN;      // filled in by the semantic analyzer
 };
 
 /* ---------- AST constructors ---------- */
@@ -64,19 +59,17 @@ inline Node *make_binop(char op, Node *l, Node *r) {
     return n;
 }
 
-/* re-assignment:  x = expr ; */
-inline Node *make_assign(const std::string &name, Node *expr) {
+inline Node *make_decl(const std::string &name, Node *expr) {
     Node *n = new Node();
-    n->type = N_ASSIGN;
+    n->type = N_DECL;
     n->name = name;
     n->left = expr;
     return n;
 }
 
-/* declaration:  let x = expr ; */
-inline Node *make_decl(const std::string &name, Node *expr) {
+inline Node *make_assign(const std::string &name, Node *expr) {
     Node *n = new Node();
-    n->type = N_DECL;
+    n->type = N_ASSIGN;
     n->name = name;
     n->left = expr;
     return n;
@@ -115,7 +108,6 @@ inline Node *make_while(Node *cond, Node *body) {
 
 /* statement lists are just Node objects threaded via ->next */
 inline Node *append_stmt(Node *list, Node *stmt) {
-    if (!stmt) return list;   /* error-recovery may produce a null stmt */
     if (!list) return stmt;
     Node *cur = list;
     while (cur->next) cur = cur->next;
@@ -123,101 +115,7 @@ inline Node *append_stmt(Node *list, Node *stmt) {
     return list;
 }
 
-/* ---------- AST printing (requirement: AST visualization) ---------- */
-
-namespace ast_print {
-
-inline const char *op_name(char op) {
-    switch (op) {
-        case '+': return "+";
-        case '-': return "-";
-        case '*': return "*";
-        case '/': return "/";
-        case 'u': return "unary-";
-        case 'E': return "==";
-        case 'N': return "!=";
-        case 'L': return "<";
-        case 'G': return ">";
-        case 'l': return "<=";
-        case 'g': return ">=";
-        default:  return "?";
-    }
-}
-
-inline void indent(int depth) {
-    for (int i = 0; i < depth; i++) printf("  ");
-}
-
-inline void print_node(Node *n, int depth);
-
-inline void print_list(Node *head, int depth) {
-    for (Node *cur = head; cur; cur = cur->next) {
-        print_node(cur, depth);
-    }
-}
-
-inline void print_node(Node *n, int depth) {
-    if (!n) return;
-    indent(depth);
-    switch (n->type) {
-        case N_NUM:
-            printf("Num(%d)\n", n->value);
-            break;
-        case N_VAR:
-            printf("Var(%s)\n", n->name.c_str());
-            break;
-        case N_BINOP:
-            printf("BinOp(%s)\n", op_name(n->op));
-            print_node(n->left, depth + 1);
-            if (n->op != 'u') print_node(n->right, depth + 1);
-            break;
-        case N_DECL:
-            printf("Declare(%s)\n", n->name.c_str());
-            print_node(n->left, depth + 1);
-            break;
-        case N_ASSIGN:
-            printf("Assign(%s)\n", n->name.c_str());
-            print_node(n->left, depth + 1);
-            break;
-        case N_PRINT:
-            printf("Print\n");
-            print_node(n->left, depth + 1);
-            break;
-        case N_PRINT_STR:
-            printf("PrintStr(\"%s\")\n", n->name.c_str());
-            break;
-        case N_IF:
-            printf("If\n");
-            indent(depth + 1); printf("Cond:\n");
-            print_node(n->left, depth + 2);
-            indent(depth + 1); printf("Then:\n");
-            print_list(n->right, depth + 2);
-            if (n->third) {
-                indent(depth + 1); printf("Else:\n");
-                print_list(n->third, depth + 2);
-            }
-            break;
-        case N_WHILE:
-            printf("While\n");
-            indent(depth + 1); printf("Cond:\n");
-            print_node(n->left, depth + 2);
-            indent(depth + 1); printf("Body:\n");
-            print_list(n->right, depth + 2);
-            break;
-        default:
-            printf("Unknown\n");
-    }
-}
-
-} // namespace ast_print
-
-inline void printAST(Node *program) {
-    printf("===== Abstract Syntax Tree =====\n");
-    ast_print::print_list(program, 0);
-    printf("================================\n");
-}
-
-/* ---------- optional interpreter (kept from your original code) ---------- */
+/* ---------- symbol table + evaluator ---------- */
 
 namespace ast_detail {
 
@@ -272,6 +170,9 @@ inline int eval_expr(Node *n) {
             if (n->op == 'u') { // unary minus
                 return -eval_expr(n->left);
             }
+            if (n->op == 'n') { // unary logical NOT
+                return !eval_expr(n->left) ? 1 : 0;
+            }
             int l = eval_expr(n->left);
             int r = eval_expr(n->right);
             switch (n->op) {
@@ -290,6 +191,8 @@ inline int eval_expr(Node *n) {
                 case 'G': return l > r;
                 case 'l': return l <= r;
                 case 'g': return l >= r;
+                case '&': return (l && r) ? 1 : 0;
+                case '|': return (l || r) ? 1 : 0;
                 default:
                     fprintf(stderr, "Runtime error: unknown operator '%c'\n", n->op);
                     exit(1);
@@ -336,6 +239,96 @@ inline void exec_list(Node *head) {
 }
 
 } // namespace ast_detail
+
+/* ---------- AST printing / visualization ---------- */
+
+inline const char *nodeTypeName(NodeType t) {
+    switch (t) {
+        case N_NUM:       return "NUM";
+        case N_VAR:       return "VAR";
+        case N_BINOP:     return "BINOP";
+        case N_DECL:      return "DECL";
+        case N_ASSIGN:    return "ASSIGN";
+        case N_PRINT:     return "PRINT";
+        case N_PRINT_STR: return "PRINT_STR";
+        case N_IF:        return "IF";
+        case N_WHILE:     return "WHILE";
+    }
+    return "?";
+}
+
+inline void printIndent(int depth) {
+    for (int i = 0; i < depth; i++) printf("  ");
+}
+
+inline void printAST(Node *n, int depth) {
+    if (!n) return;
+    printIndent(depth);
+
+    switch (n->type) {
+        case N_NUM:
+            printf("NUM %d\n", n->value);
+            break;
+
+        case N_VAR:
+            printf("VAR %s\n", n->name.c_str());
+            break;
+
+        case N_BINOP:
+            printf("BINOP '%c'\n", n->op);
+            printAST(n->left, depth + 1);
+            if (n->right) printAST(n->right, depth + 1);
+            break;
+
+        case N_DECL:
+            printf("DECL %s =\n", n->name.c_str());
+            printAST(n->left, depth + 1);
+            break;
+
+        case N_ASSIGN:
+            printf("ASSIGN %s =\n", n->name.c_str());
+            printAST(n->left, depth + 1);
+            break;
+
+        case N_PRINT:
+            printf("PRINT\n");
+            printAST(n->left, depth + 1);
+            break;
+
+        case N_PRINT_STR:
+            printf("PRINT_STR \"%s\"\n", n->name.c_str());
+            break;
+
+        case N_IF:
+            printf("IF\n");
+            printIndent(depth + 1); printf("cond:\n");
+            printAST(n->left, depth + 2);
+            printIndent(depth + 1); printf("then:\n");
+            for (Node *c = n->right; c; c = c->next) printAST(c, depth + 2);
+            if (n->third) {
+                printIndent(depth + 1); printf("else:\n");
+                for (Node *c = n->third; c; c = c->next) printAST(c, depth + 2);
+            }
+            break;
+
+        case N_WHILE:
+            printf("WHILE\n");
+            printIndent(depth + 1); printf("cond:\n");
+            printAST(n->left, depth + 2);
+            printIndent(depth + 1); printf("body:\n");
+            for (Node *c = n->right; c; c = c->next) printAST(c, depth + 2);
+            break;
+    }
+}
+
+/* prints a whole statement list (a program, or a block) */
+inline void printASTList(Node *head) {
+    printf("===== Abstract Syntax Tree =====\n");
+    for (Node *cur = head; cur; cur = cur->next) {
+        printAST(cur, 0);
+    }
+    printf("=================================\n");
+}
 
 inline void interpret(Node *program) {
     ast_detail::exec_list(program);

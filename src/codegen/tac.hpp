@@ -5,20 +5,6 @@
 #include <string>
 #include "ast.hpp"
 
-/*
- * Three Address Code (TAC) generator.
- *
- * Produces simple instructions of the form:
- *      t1 = 5 + 3
- *      x  = t1
- *      if t2 goto L1
- *      goto L2
- *      L1:
- *      ...
- *
- * Temporaries are named t1, t2, ...  Labels are L1, L2, ...
- */
-
 class TACGenerator {
 public:
     TACGenerator() : tempCount(0), labelCount(0) {}
@@ -48,11 +34,12 @@ private:
             case 'G': return ">";
             case 'l': return "<=";
             case 'g': return ">=";
+            case '&': return "&&";
+            case '|': return "||";
             default:  return "?";
         }
     }
 
-    /* generate code for an expression, return the name holding its value */
     std::string genExpr(Node *n) {
         switch (n->type) {
             case N_NUM:
@@ -66,6 +53,12 @@ private:
                     std::string a = genExpr(n->left);
                     std::string t = newTemp();
                     printf("\t%s = -%s\n", t.c_str(), a.c_str());
+                    return t;
+                }
+                if (n->op == 'n') {              // unary logical NOT
+                    std::string a = genExpr(n->left);
+                    std::string t = newTemp();
+                    printf("\t%s = !%s\n", t.c_str(), a.c_str());
                     return t;
                 }
                 std::string a = genExpr(n->left);
@@ -110,17 +103,15 @@ private:
             case N_IF: {
                 std::string cond = genExpr(n->left);
                 if (n->third) {
-                    /* if-else */
                     std::string Lelse = newLabel();
                     std::string Lend  = newLabel();
                     printf("\tifFalse %s goto %s\n", cond.c_str(), Lelse.c_str());
-                    genList(n->right);                 // then
+                    genList(n->right);
                     printf("\tgoto %s\n", Lend.c_str());
                     printf("%s:\n", Lelse.c_str());
-                    genList(n->third);                 // else
+                    genList(n->third);
                     printf("%s:\n", Lend.c_str());
                 } else {
-                    /* if only */
                     std::string Lend = newLabel();
                     printf("\tifFalse %s goto %s\n", cond.c_str(), Lend.c_str());
                     genList(n->right);
@@ -135,7 +126,7 @@ private:
                 printf("%s:\n", Lstart.c_str());
                 std::string cond = genExpr(n->left);
                 printf("\tifFalse %s goto %s\n", cond.c_str(), Lend.c_str());
-                genList(n->right);                     // body
+                genList(n->right);
                 printf("\tgoto %s\n", Lstart.c_str());
                 printf("%s:\n", Lend.c_str());
                 break;

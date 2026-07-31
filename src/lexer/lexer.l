@@ -3,8 +3,8 @@
 
 %{
 #include "parser.tab.h"
-#include <cstdlib>
-#include <cstring>
+#include <stdlib.h>
+#include <string.h>
 %}
 
 %%
@@ -29,6 +29,9 @@
 ">="                    { return GE; }
 "<"                     { return LT; }
 ">"                     { return GT; }
+"&&"                    { return AND; }
+"||"                    { return OR; }
+"!"                     { return NOT; }
 
 "="                     { return '='; }
 "+"                     { return '+'; }
@@ -43,7 +46,7 @@
 
 "//"[^\n]*              { /* line comment, skip */ }
 [ \t\r]+                { /* skip whitespace */ }
-\n                      { /* newline, yylineno tracks it */ }
+\n                      { /* skip newline, yylineno tracks it */ }
 
 .                       { fprintf(stderr, "Lexical error line %d: unexpected character '%s'\n", yylineno, yytext); }
 

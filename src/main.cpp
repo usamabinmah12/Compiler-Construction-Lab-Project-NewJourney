@@ -1,9 +1,12 @@
 #include "ast.hpp"
+#include "semantic.hpp"
+#include "tac.hpp"
 #include <cstdio>
 
 extern int yyparse();
 extern FILE *yyin;
 extern Node *root;
+extern int syntaxErrorCount;
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -17,16 +20,35 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    int result = yyparse();
+    yyparse();  // may recover from syntax errors and keep going (see "error ';'" rule)
     fclose(yyin);
 
-    if (result == 0 && root) {
-        interpret(root);
-        return 0;
-    } else {
-        fprintf(stderr, "Compilation failed.\n");
+    if (syntaxErrorCount > 0) {
+        fprintf(stderr, "Compilation failed: %d syntax error(s).\n", syntaxErrorCount);
         return 1;
     }
+    if (!root) {
+        fprintf(stderr, "Compilation failed: no program parsed.\n");
+        return 1;
+    }
+
+    printf("--- Parsing Successful ---\n");
+    printASTList(root);
+
+    SemanticAnalyzer sem;
+    int errors = sem.analyze(root);
+    sem.table().print();
+
+    if (errors > 0) {
+        fprintf(stderr, "Compilation failed: %d semantic error(s).\n", errors);
+        return 1;
+    }
+
+    TACGenerator tac;
+    tac.generate(root);
+
+    printf("--- Running the program ---\n");
+    interpret(root);
+
+    return 0;
 }
-
-

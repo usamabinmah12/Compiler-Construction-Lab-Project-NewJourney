@@ -5,26 +5,10 @@
 #include "ast.hpp"
 #include "symtab.hpp"
 
-/*
- * Semantic Analyzer.
- *
- * Walks the AST and detects:
- *   - Undeclared variables      (using x before "let x = ...")
- *   - Redeclaration             (let x ...; let x ...; in the same scope)
- *   - Scope violations          (using a variable outside the block it was declared in)
- *   - Type mismatch             (mixing int and bool wrongly)
- *   - Invalid assignments       (assigning a bool to an int variable, etc.)
- *   - Invalid expressions       (arithmetic on bool, etc.)
- *
- * It also fills in each expression node's ->etype (T_INT / T_BOOL),
- * which the type checks rely on.
- */
-
 class SemanticAnalyzer {
 public:
     SemanticAnalyzer() : errors(0) {}
 
-    /* returns number of semantic errors found (0 == success) */
     int analyze(Node *program) {
         errors = 0;
         checkList(program);
@@ -47,9 +31,6 @@ private:
         errors++;
     }
 
-    /* ---- expression type checking ---- */
-
-    /* returns the resulting type of an expression, and sets n->etype */
     ExprType checkExpr(Node *n) {
         if (!n) return T_UNKNOWN;
 
@@ -61,11 +42,8 @@ private:
             case N_VAR: {
                 Symbol *s = symtab.lookup(n->name);
                 if (!s) {
-                    /* covers both "undeclared" and "scope violation":
-                       if it was declared in a block that already closed,
-                       lookup won't find it either */
                     error(n->line, "use of undeclared variable", n->name);
-                    n->etype = T_INT;   // assume int to keep going
+                    n->etype = T_INT;
                     return T_INT;
                 }
                 n->etype = s->type;
@@ -73,13 +51,21 @@ private:
             }
 
             case N_BINOP: {
-                if (n->op == 'u') {         // unary minus
+                if (n->op == 'u') {          // unary minus
                     ExprType t = checkExpr(n->left);
                     if (t == T_BOOL) {
                         error(n->line, "cannot apply '-' to a boolean value", "");
                     }
                     n->etype = T_INT;
                     return T_INT;
+                }
+                if (n->op == 'n') {          // unary logical NOT
+                    ExprType t = checkExpr(n->left);
+                    if (t == T_INT) {
+                        error(n->line, "cannot apply '!' to a non-boolean value", "");
+                    }
+                    n->etype = T_BOOL;
+                    return T_BOOL;
                 }
 
                 ExprType lt = checkExpr(n->left);
@@ -93,6 +79,14 @@ private:
                     }
                     n->etype = T_INT;
                     return T_INT;
+                } else if (isLogical(n->op)) {
+                    /* && ||  need bool operands, produce bool */
+                    if (lt == T_INT || rt == T_INT) {
+                        error(n->line,
+                              "logical operator used on a non-boolean value", "");
+                    }
+                    n->etype = T_BOOL;
+                    return T_BOOL;
                 } else {
                     /* == != < > <= >=  compare ints, produce bool */
                     if (lt == T_BOOL || rt == T_BOOL) {
@@ -114,7 +108,9 @@ private:
         return op == '+' || op == '-' || op == '*' || op == '/';
     }
 
-    /* ---- statement checking ---- */
+    static bool isLogical(char op) {
+        return op == '&' || op == '|';
+    }
 
     void checkList(Node *head) {
         for (Node *cur = head; cur; cur = cur->next) {
@@ -126,8 +122,6 @@ private:
         switch (n->type) {
 
             case N_DECL: {
-                /* first check the initializer, THEN declare the name
-                   (so "let x = x;" correctly reports x as undeclared) */
                 ExprType t = checkExpr(n->left);
                 if (!symtab.declare(n->name, t, n->line)) {
                     error(n->line, "redeclaration of variable", n->name);
@@ -154,7 +148,6 @@ private:
                 break;
 
             case N_PRINT_STR:
-                /* nothing to check */
                 break;
 
             case N_IF: {
@@ -163,11 +156,11 @@ private:
                     error(n->line, "if condition must be a boolean expression", "");
                 }
                 symtab.enterScope();
-                checkList(n->right);       // then-branch
+                checkList(n->right);
                 symtab.exitScope();
                 if (n->third) {
                     symtab.enterScope();
-                    checkList(n->third);   // else-branch
+                    checkList(n->third);
                     symtab.exitScope();
                 }
                 break;
@@ -179,7 +172,7 @@ private:
                     error(n->line, "while condition must be a boolean expression", "");
                 }
                 symtab.enterScope();
-                checkList(n->right);       // body
+                checkList(n->right);
                 symtab.exitScope();
                 break;
             }
